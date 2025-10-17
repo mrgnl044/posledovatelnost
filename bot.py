@@ -14,9 +14,8 @@ from aiogram.types import (
 )
 from dotenv import load_dotenv
 
-# ------------------------------
+
 #  Настройка и запуск
-# ------------------------------
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
@@ -29,9 +28,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# ------------------------------
+
 #  Глобальные переменные
-# ------------------------------
 
 user_sessions = {}
 media_cache = defaultdict(list)
@@ -40,9 +38,8 @@ warning_cache = {}
 WARNING_COOLDOWN = 1.5
 SESSION_LIFETIME = 120  # секунд
 
-# ------------------------------
+
 #  Клавиатура
-# ------------------------------
 
 start_kb = ReplyKeyboardMarkup(
     keyboard=[
@@ -51,15 +48,14 @@ start_kb = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# ------------------------------
+
 #  Команды
-# ------------------------------
 
 @dp.message(F.text.in_({"/start", "↩️ Сбросить"}))
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     user_sessions.pop(user_id, None)
-    # Очищаем медиагруппы пользователя
+    
     gids_to_remove = []
     for gid, msgs in media_cache.items():
         if any(m.from_user.id == user_id for m in msgs):
@@ -70,7 +66,7 @@ async def cmd_start(message: types.Message):
 
     await message.answer(
         "Назначим новую последовательность!\n"
-        "Отправьте сообщение с 2–10 файлами одного типа 📎",
+        "Отправьте сообщение с 2–10 файлами одного типа",
         reply_markup=start_kb
     )
 
@@ -79,16 +75,15 @@ async def cmd_start(message: types.Message):
 async def cmd_help(message: types.Message):
     help_text = (
         "<b>Как пользоваться:</b>\n\n"
-        "1️⃣ Отправьте медиагруппу (2–10 вложений одного типа: фото, видео, аудио или документы).\n"
-        "2️⃣ Бот покажет текущий порядок файлов.\n"
-        "3️⃣ Введите новый порядок — например: <code>3 1 2</code>.\n\n"
-        "После этого получите новую медиагруппу, готовую к пересылке 🚀"
+        "1. Отправьте медиагруппу - всё то, что вы загружаете файлом/документом (2–10 вложений <b>одинакового</b> типа: фото, видео, аудио, документы).\n"
+        "2. Бот покажет текущий порядок файлов, а вы назначите новую последовательность.\n\n"
+        "<b>Пример:</b> если файлов 3, введите '3 2 1'.\n"
+        "После ввода вы получите файлы в новом порядке одним сообщением, которое остаётся только переслать"
     )
     await message.answer(help_text, parse_mode="HTML")
 
-# ------------------------------
+
 #  Обработка медиагрупп
-# ------------------------------
 
 async def process_media_group(group_id: str):
     messages = media_cache.pop(group_id, [])
@@ -102,7 +97,7 @@ async def process_media_group(group_id: str):
 
         if len(content_types) > 1 or not (2 <= len(messages) <= 10):
             logging.warning(f"Неверная медиагруппа от {user_id}")
-            await message.answer("❌ Отправьте 2-10 файлов одного типа")
+            await message.answer("Отправьте 2-10 файлов одного типа")
             return
     except Exception as e:
         logging.error(f"Ошибка обработки медиагруппы {group_id}: {e}")
@@ -132,7 +127,7 @@ async def process_media_group(group_id: str):
     reverse_list = " ".join(str(i + 1) for i in reversed(range(len(files))))
 
     await message.answer(
-        f"📦 Получено файлов: {len(files)}\n\n"
+        f"Получено файлов: {len(files)}\n\n"
         f"Текущий порядок: {order_list}\n"
         f"Введите новую последовательность (например: {reverse_list})"
     )
@@ -160,9 +155,8 @@ async def delayed_process(group_id: str, delay: float):
     finally:
         group_timers.pop(group_id, None)
 
-# ------------------------------
+
 #  Ввод новой последовательности
-# ------------------------------
 
 @dp.message(F.text.regexp(r"^(\d+\s*)+$"))
 async def handle_order_input(message: types.Message):
@@ -170,12 +164,12 @@ async def handle_order_input(message: types.Message):
     session = user_sessions.get(user_id)
 
     if not session:
-        await message.answer("Отправьте сначала медиагруппу 📎")
+        await message.answer("Сначала отправьте медиагруппу")
         return
 
     if time.time() - session["timestamp"] > SESSION_LIFETIME:
         user_sessions.pop(user_id, None)
-        await message.answer("⏰ Сессия устарела, отправьте новую медиагруппу.")
+        await message.answer("Сессия устарела, отправьте новую медиагруппу")
         return
 
     files = session["files"]
@@ -185,11 +179,11 @@ async def handle_order_input(message: types.Message):
     try:
         order_numbers = [int(x) for x in message.text.split()]
     except ValueError:
-        await message.answer("❌ Введите только числа, разделенные пробелами")
+        await message.answer("Введите только числа, разделенные пробелами")
         return
 
     if len(order_numbers) != expected_count or len(set(order_numbers)) != expected_count:
-        await message.answer(f"Введите {expected_count} уникальных чисел от 1 до {expected_count}")
+        await message.answer(f"Введите числа от 1 до {expected_count} через пробел")
         return
 
     if sorted(order_numbers) != list(range(1, expected_count + 1)):
@@ -211,18 +205,16 @@ async def handle_order_input(message: types.Message):
 
     try:
         await bot.send_media_group(chat_id=user_id, media=media)
-        await message.answer("✅ Готово! Новая последовательность применена.")
+        
     except Exception as e:
         logging.error(f"Ошибка отправки медиагруппы: {e}")
-        await message.answer("❌ Ошибка при отправке медиагруппы. Попробуйте еще раз.")
+        await message.answer("Ошибка при отправке медиагруппы. Попробуйте еще раз")
     finally:
-        # Очищаем сессию после использования
+        
         user_sessions.pop(user_id, None)
 
 
-# ------------------------------
 #  Антиспам и fallback
-# ------------------------------
 
 @dp.message()
 async def fallback_handler(message: types.Message):
@@ -235,9 +227,8 @@ async def fallback_handler(message: types.Message):
     warning_cache[user_id] = now
     await message.answer("Некорректная команда. Используйте /help")
 
-# ------------------------------
+
 #  Очистка кэша
-# ------------------------------
 
 async def cleanup_cache():
     while True:
@@ -251,9 +242,8 @@ async def cleanup_cache():
             media_cache.pop(gid, None)
         await asyncio.sleep(30)
 
-# ------------------------------
+
 #  main
-# ------------------------------
 
 async def main():
     logging.info("Бот запущен... (Ctrl + C для остановки)")
@@ -269,3 +259,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
